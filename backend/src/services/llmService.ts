@@ -12,13 +12,13 @@ export class LLMService {
     this.openai = new OpenAI({ apiKey: config.openai.apiKey });
   }
 
-  async generateDocumentation(summary: RepoSummary): Promise<GeneratedDocs> {
-    console.log('Generating documentation with LLM...');
+  async generateDocumentation(summary: RepoSummary, template?: any): Promise<GeneratedDocs> {
+    console.log('Generating documentation with LLM...', template ? `(using template: ${template.name})` : '');
 
     const [architecture, apiDocs, readme] = await Promise.all([
-      this.generateArchitectureDoc(summary),
-      this.generateApiDocs(summary),
-      this.generateReadme(summary),
+      this.generateArchitectureDoc(summary, template?.architecturePrompt),
+      this.generateApiDocs(summary, template?.apiPrompt),
+      this.generateReadme(summary, template?.readmePrompt),
     ]);
 
     return {
@@ -30,7 +30,7 @@ export class LLMService {
     };
   }
 
-  private async generateArchitectureDoc(summary: RepoSummary): Promise<string> {
+  private async generateArchitectureDoc(summary: RepoSummary, customPrompt?: string): Promise<string> {
     const summaryJson = JSON.stringify(
       {
         name: summary.name,
@@ -50,7 +50,7 @@ export class LLMService {
       2
     );
 
-    const prompt = `You are a technical architect analyzing a codebase. Based on the following repository summary, create a comprehensive architecture overview document in Markdown format.
+    const prompt = customPrompt || `You are a technical architect analyzing a codebase. Based on the following repository summary, create a comprehensive architecture overview document in Markdown format.
 
 Repository Summary:
 ${summaryJson}
@@ -65,9 +65,11 @@ Please include:
 
 Format the output as a well-structured Markdown document with clear headings and sections.`;
 
+    const finalPrompt = customPrompt ? `${prompt}\n\nRepository Summary:\n${summaryJson}` : prompt;
+
     const response = await this.openai.chat.completions.create({
       model: config.openai.model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: finalPrompt }],
       temperature: 0.7,
       max_tokens: 2000,
     });
@@ -75,7 +77,7 @@ Format the output as a well-structured Markdown document with clear headings and
     return response.choices[0].message.content || '# Architecture Overview\n\nNo content generated.';
   }
 
-  private async generateApiDocs(summary: RepoSummary): Promise<string> {
+  private async generateApiDocs(summary: RepoSummary, customPrompt?: string): Promise<string> {
     const controllers = summary.modules.filter((m) => m.type === 'controller' || m.type === 'route');
     const services = summary.modules.filter((m) => m.type === 'service');
 
@@ -98,7 +100,7 @@ Format the output as a well-structured Markdown document with clear headings and
       2
     );
 
-    const prompt = `You are a technical writer creating API documentation. Based on the following repository information, generate comprehensive API documentation in Markdown format.
+    const prompt = customPrompt || `You are a technical writer creating API documentation. Based on the following repository information, generate comprehensive API documentation in Markdown format.
 
 Repository Information:
 ${summaryJson}
@@ -113,9 +115,11 @@ Please include:
 
 Format the output as a well-structured Markdown document. Make reasonable assumptions based on the framework and module names.`;
 
+    const finalPrompt = customPrompt ? `${prompt}\n\nRepository Information:\n${summaryJson}` : prompt;
+
     const response = await this.openai.chat.completions.create({
       model: config.openai.model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: finalPrompt }],
       temperature: 0.7,
       max_tokens: 2000,
     });
@@ -123,7 +127,7 @@ Format the output as a well-structured Markdown document. Make reasonable assump
     return response.choices[0].message.content || '# API Documentation\n\nNo content generated.';
   }
 
-  private async generateReadme(summary: RepoSummary): Promise<string> {
+  private async generateReadme(summary: RepoSummary, customPrompt?: string): Promise<string> {
     const summaryJson = JSON.stringify(
       {
         name: summary.name,
@@ -137,7 +141,7 @@ Format the output as a well-structured Markdown document. Make reasonable assump
       2
     );
 
-    const prompt = `You are a developer creating a README for a project. Based on the following repository summary, generate a comprehensive README.md file.
+    const prompt = customPrompt || `You are a developer creating a README for a project. Based on the following repository summary, generate a comprehensive README.md file.
 
 Repository Summary:
 ${summaryJson}
@@ -155,9 +159,11 @@ Please include:
 
 Format as a professional README.md with proper Markdown formatting, badges (if appropriate), and clear sections.`;
 
+    const finalPrompt = customPrompt ? `${prompt}\n\nRepository Summary:\n${summaryJson}` : prompt;
+
     const response = await this.openai.chat.completions.create({
       model: config.openai.model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: finalPrompt }],
       temperature: 0.7,
       max_tokens: 2500,
     });
