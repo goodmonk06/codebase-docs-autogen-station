@@ -1,0 +1,52 @@
+// Prisma schema for codebase docs autogen
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model RepoConfig {
+  id           String        @id @default(uuid())
+  name         String        @unique
+  githubUrl    String?
+  localPath    String?
+  mainLanguage String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  runs         AnalysisRun[]
+
+  @@index([name])
+}
+
+model AnalysisRun {
+  id            String              @id @default(uuid())
+  repoId        String
+  refName       String              @default("main") // branch or tag
+  startedAt     DateTime            @default(now())
+  finishedAt    DateTime?
+  status        String              // pending, running, completed, failed
+  artifactsJson String?             // JSON summary of analysis
+  errorMessage  String?
+  repo          RepoConfig          @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  artifacts     GeneratedArtifact[]
+
+  @@index([repoId])
+  @@index([status])
+}
+
+model GeneratedArtifact {
+  id        String      @id @default(uuid())
+  runId     String
+  type      String      // arch_doc, api_doc, readme, diagram_puml, diagram_dot
+  path      String      // relative path in workspace
+  content   String      // the generated content
+  createdAt DateTime    @default(now())
+  run       AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([type])
+}
