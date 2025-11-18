@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+*.log
+.env
+.env.local
+.env.*.local
+coverage
+*.db
+*.db-journal
+workspace
+.git
+.gitignore
+README.md
+.vscode
+.idea

@@ -3,6 +3,8 @@ import cors from '@fastify/cors';
 import { config } from './config';
 import { repoRoutes } from './routes/repos';
 import { runRoutes } from './routes/runs';
+import { createErrorHandler } from './lib/errors';
+import { disconnectPrisma } from './lib/prisma';
 
 const fastify = Fastify({
   logger: {
@@ -12,6 +14,9 @@ const fastify = Fastify({
 
 async function start() {
   try {
+    // Register error handler
+    fastify.setErrorHandler(createErrorHandler());
+
     // Register CORS
     await fastify.register(cors, {
       origin: true,
@@ -39,5 +44,18 @@ async function start() {
     process.exit(1);
   }
 }
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  await disconnectPrisma();
+  await fastify.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await disconnectPrisma();
+  await fastify.close();
+  process.exit(0);
+});
 
 start();

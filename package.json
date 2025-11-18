@@ -12,9 +12,15 @@
     "dev:backend": "npm run dev --workspace=backend",
     "dev:frontend": "npm run dev --workspace=frontend",
     "build": "npm run build --workspaces",
-    "prisma:generate": "npm run prisma:generate --workspace=backend",
-    "prisma:migrate": "npm run prisma:migrate --workspace=backend",
-    "prisma:studio": "npm run prisma:studio --workspace=backend"
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "type-check": "npm run type-check --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace=backend",
+    "db:push": "npm run db:push --workspace=backend",
+    "db:migrate": "npm run db:migrate --workspace=backend",
+    "db:seed": "npm run db:seed --workspace=backend",
+    "db:studio": "npm run db:studio --workspace=backend",
+    "db:setup": "npm run db:push && npm run db:seed"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

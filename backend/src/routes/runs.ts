@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '../lib/prisma';
+import { NotFoundError } from '../lib/errors';
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 export async function runRoutes(fastify: FastifyInstance) {
   // List all runs
@@ -31,8 +32,7 @@ export async function runRoutes(fastify: FastifyInstance) {
     });
 
     if (!run) {
-      reply.code(404).send({ error: 'Run not found' });
-      return;
+      throw new NotFoundError('Run not found');
     }
 
     return run;
@@ -47,8 +47,7 @@ export async function runRoutes(fastify: FastifyInstance) {
     });
 
     if (!artifact) {
-      reply.code(404).send({ error: 'Artifact not found' });
-      return;
+      throw new NotFoundError('Artifact not found');
     }
 
     return artifact;

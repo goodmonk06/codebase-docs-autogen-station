@@ -1,10 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '../lib/prisma';
 import { createRepoSource } from './repoSource';
 import { RepositoryScanner } from './scanner';
 import { LLMService } from './llmService';
 import { DiagramGenerator } from './diagramGenerator';
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 export class AnalysisOrchestrator {
   private llmService: LLMService;

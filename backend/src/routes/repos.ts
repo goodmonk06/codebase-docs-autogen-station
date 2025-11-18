@@ -1,20 +1,23 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '../lib/prisma';
+import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AnalysisOrchestrator } from '../services/analysisOrchestrator';
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 const orchestrator = new AnalysisOrchestrator();
 
 const CreateRepoSchema = z.object({
-  name: z.string().min(1),
-  githubUrl: z.string().url().optional(),
-  localPath: z.string().optional(),
+  name: z.string().min(1, 'Repository name is required'),
+  githubUrl: z.string().url('Must be a valid URL').optional(),
+  localPath: z.string().min(1).optional(),
   mainLanguage: z.string().optional(),
 });
 
+const UpdateRepoSchema = CreateRepoSchema.partial();
+
 const TriggerAnalysisSchema = z.object({
-  refName: z.string().default('main'),
+  refName: z.string().min(1).default('main'),
 });
 
 export async function repoRoutes(fastify: FastifyInstance) {
@@ -45,8 +48,7 @@ export async function repoRoutes(fastify: FastifyInstance) {
     });
 
     if (!repo) {
-      reply.code(404).send({ error: 'Repository not found' });
-      return;
+      throw new NotFoundError('Repository not found');
     }
 
     return repo;
@@ -57,8 +59,7 @@ export async function repoRoutes(fastify: FastifyInstance) {
     const body = CreateRepoSchema.parse(request.body);
 
     if (!body.githubUrl && !body.localPath) {
-      reply.code(400).send({ error: 'Either githubUrl or localPath must be provided' });
-      return;
+      throw new BadRequestError('Either githubUrl or localPath must be provided');
     }
 
     const repo = await prisma.repoConfig.create({
@@ -70,13 +71,14 @@ export async function repoRoutes(fastify: FastifyInstance) {
       },
     });
 
+    reply.code(201);
     return repo;
   });
 
   // Update repo
   fastify.put('/repos/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = CreateRepoSchema.partial().parse(request.body);
+    const body = UpdateRepoSchema.parse(request.body);
 
     const repo = await prisma.repoConfig.update({
       where: { id },
@@ -107,12 +109,12 @@ export async function repoRoutes(fastify: FastifyInstance) {
     });
 
     if (!repo) {
-      reply.code(404).send({ error: 'Repository not found' });
-      return;
+      throw new NotFoundError('Repository not found');
     }
 
     const runId = await orchestrator.executeAnalysis(id, body.refName);
 
+    reply.code(202);
     return { runId, message: 'Analysis started' };
   });
 }
