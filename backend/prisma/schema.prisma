@@ -10,43 +10,175 @@ datasource db {
 }
 
 model RepoConfig {
-  id           String        @id @default(uuid())
-  name         String        @unique
-  githubUrl    String?
-  localPath    String?
-  mainLanguage String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  runs         AnalysisRun[]
+  id              String            @id @default(uuid())
+  name            String            @unique
+  githubUrl       String?
+  localPath       String?
+  mainLanguage    String?
+  description     String?
+  isArchived      Boolean           @default(false)
+  lastAnalyzedAt  DateTime?
+  templateId      String?
+  scheduleId      String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  runs            AnalysisRun[]
+  tags            RepoTag[]
+  template        AnalysisTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  schedule        ScheduledAnalysis? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
   @@index([name])
+  @@index([isArchived])
+  @@index([lastAnalyzedAt])
 }
 
 model AnalysisRun {
-  id            String              @id @default(uuid())
-  repoId        String
-  refName       String              @default("main") // branch or tag
-  startedAt     DateTime            @default(now())
-  finishedAt    DateTime?
-  status        String              // pending, running, completed, failed
-  artifactsJson String?             // JSON summary of analysis
-  errorMessage  String?
-  repo          RepoConfig          @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  artifacts     GeneratedArtifact[]
+  id               String              @id @default(uuid())
+  repoId           String
+  refName          String              @default("main") // branch or tag
+  startedAt        DateTime            @default(now())
+  finishedAt       DateTime?
+  status           String              // pending, running, completed, failed
+  artifactsJson    String?             // JSON summary of analysis
+  errorMessage     String?
+  templateId       String?
+  retryCount       Int                 @default(0)
+  parentRunId      String?             // for retry tracking
+  durationMs       Int?
+  linesScanned     Int?
+  filesScanned     Int?
+  triggeredBy      String              @default("manual") // manual, scheduled, webhook
+  repo             RepoConfig          @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  artifacts        GeneratedArtifact[]
+  template         AnalysisTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  metrics          AnalysisMetrics[]
+  comparisons      AnalysisComparison[] @relation("CurrentRun")
+  comparedAgainst  AnalysisComparison[] @relation("PreviousRun")
 
   @@index([repoId])
   @@index([status])
+  @@index([startedAt])
+  @@index([triggeredBy])
 }
 
 model GeneratedArtifact {
-  id        String      @id @default(uuid())
-  runId     String
-  type      String      // arch_doc, api_doc, readme, diagram_puml, diagram_dot
-  path      String      // relative path in workspace
-  content   String      // the generated content
-  createdAt DateTime    @default(now())
-  run       AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  id                String      @id @default(uuid())
+  runId             String
+  type              String      // arch_doc, api_doc, readme, diagram_puml, diagram_dot
+  path              String      // relative path in workspace
+  content           String      // the generated content
+  version           Int         @default(1)
+  previousVersionId String?
+  changesSummary    String?
+  wordCount         Int?
+  createdAt         DateTime    @default(now())
+  run               AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@index([runId])
   @@index([type])
+  @@index([version])
+}
+
+// New entities for Phase 3
+
+model AnalysisTemplate {
+  id                  String        @id @default(uuid())
+  name                String        @unique
+  description         String?
+  focusAreas          String[]      // e.g. ["security", "performance", "architecture"]
+  architecturePrompt  String?       // custom prompt for architecture doc
+  apiPrompt           String?       // custom prompt for API doc
+  readmePrompt        String?       // custom prompt for README
+  diagramStyle        String        @default("standard") // standard, detailed, minimal
+  includeMetrics      Boolean       @default(true)
+  isPublic            Boolean       @default(false)
+  createdBy           String?       // user ID if multi-tenant
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  repos               RepoConfig[]
+  runs                AnalysisRun[]
+
+  @@index([name])
+  @@index([isPublic])
+}
+
+model RepoTag {
+  id        String     @id @default(uuid())
+  repoId    String
+  tag       String     // e.g. "frontend", "backend", "microservice", "team-alpha"
+  category  String     @default("general") // general, team, project, language, domain
+  color     String?    // hex color for UI
+  createdAt DateTime   @default(now())
+  repo      RepoConfig @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, tag])
+  @@index([tag])
+  @@index([category])
+}
+
+model ScheduledAnalysis {
+  id            String       @id @default(uuid())
+  cronExpression String      // e.g. "0 0 * * *" for daily at midnight
+  enabled       Boolean      @default(true)
+  lastRunAt     DateTime?
+  nextRunAt     DateTime?
+  timezone      String       @default("UTC")
+  notifyOn      String       @default("all") // all, errors, changes
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  repos         RepoConfig[]
+
+  @@index([enabled])
+  @@index([nextRunAt])
+}
+
+model AnalysisComparison {
+  id              String      @id @default(uuid())
+  currentRunId    String
+  previousRunId   String
+  changesSummary  String      // high-level summary of changes
+  addedModules    Int         @default(0)
+  removedModules  Int         @default(0)
+  modifiedModules Int         @default(0)
+  addedDeps       Int         @default(0)
+  removedDeps     Int         @default(0)
+  diffJson        String?     // detailed diff data
+  createdAt       DateTime    @default(now())
+  currentRun      AnalysisRun @relation("CurrentRun", fields: [currentRunId], references: [id], onDelete: Cascade)
+  previousRun     AnalysisRun @relation("PreviousRun", fields: [previousRunId], references: [id], onDelete: Cascade)
+
+  @@unique([currentRunId, previousRunId])
+  @@index([currentRunId])
+  @@index([previousRunId])
+}
+
+model NotificationConfig {
+  id          String   @id @default(uuid())
+  userId      String?  // null = system-wide
+  channel     String   // email, slack, discord, webhook
+  enabled     Boolean  @default(true)
+  events      String[] // analysis_completed, analysis_failed, analysis_scheduled
+  destination String   // email address, webhook URL, etc.
+  metadata    String?  // JSON for channel-specific config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([channel])
+  @@index([enabled])
+}
+
+model AnalysisMetrics {
+  id                String      @id @default(uuid())
+  runId             String
+  metricName        String      // e.g. "scan_duration", "llm_tokens", "files_processed"
+  metricValue       Float
+  unit              String?     // ms, count, bytes, etc.
+  labels            String?     // JSON for dimensional data
+  timestamp         DateTime    @default(now())
+  run               AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([metricName])
+  @@index([timestamp])
 }
